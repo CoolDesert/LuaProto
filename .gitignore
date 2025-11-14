@@ -4,4 +4,4 @@ compile_commands.json
 .vscode
 .cache
 *.pb.cc
-*.pb.h
+*.pb.h_codeql_detected_source_root
