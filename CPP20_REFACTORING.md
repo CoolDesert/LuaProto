@@ -218,17 +218,46 @@ const auto len = lua_rawlen(L, -1);
 
 ### Makefile Updates
 
-1. **C++20 Standard:** `-std=c++20` enforced
-2. **Optimizations:** Added `-O2` for release builds
-3. **Warnings:** Added `-Wall -Wextra` for comprehensive warnings
-4. **Portable Paths:** Using `?=` for variable defaults to support different environments
+The Makefile now supports both **Linux** and **macOS** platforms with automatic detection:
 
+1. **Platform Detection:** Automatically detects the operating system using `uname -s`
+2. **Platform-Specific Settings:**
+   - **macOS:** Uses Homebrew paths (`/opt/homebrew/*`), `clang++`, and macOS-specific linker flags
+   - **Linux:** Uses standard system paths (`/usr/*`), `g++`, and Linux-specific settings
+3. **C++20 Standard:** `-std=c++20` enforced on both platforms
+4. **Optimizations:** Added `-O2` for release builds
+5. **Warnings:** Added `-Wall -Wextra` for comprehensive warnings
+6. **Lua Include Paths:** Platform-aware Lua header detection
+7. **Info Target:** Run `make info` to see detected platform and paths
+
+**Example Makefile structure:**
 ```makefile
-BINDIR?=/usr/bin
-LIBDIR?=/usr/lib/x86_64-linux-gnu
-INCDIR?=/usr/include
-CC=g++
-CFLAGS=-fPIC --shared -std=c++20 -O2 -DNDEBUG -Wall -Wextra
+# Detect operating system
+UNAME_S := $(shell uname -s)
+
+# Platform-specific settings
+ifeq ($(UNAME_S),Darwin)
+    # macOS settings
+    BINDIR?=/opt/homebrew/bin
+    LIBDIR?=/opt/homebrew/lib
+    CC=clang++
+    PLATFORM_LDFLAGS=-undefined dynamic_lookup
+    LUA_INCDIR?=$(INCDIR)/lua
+else ifeq ($(UNAME_S),Linux)
+    # Linux settings
+    BINDIR?=/usr/bin
+    LIBDIR?=/usr/lib/x86_64-linux-gnu
+    CC=g++
+    LUA_INCDIR?=/usr/include/lua5.3
+endif
+
+# Common C++20 flags
+CFLAGS=-fPIC --shared -std=c++20 -O2 -DNDEBUG -Wall -Wextra $(PLATFORM_LDFLAGS)
+```
+
+**Testing your platform:**
+```bash
+make info  # Shows detected OS and configuration
 ```
 
 ## Header Inclusions
@@ -267,8 +296,13 @@ All changes have been validated with the existing test suite:
 ## Compatibility
 
 - **Minimum C++ Standard:** C++20
-- **Tested Compilers:** GCC 11+ (with C++20 support)
-- **Platform:** Linux (Ubuntu 24.04 LTS)
+- **Supported Platforms:**
+  - **Linux:** Ubuntu 24.04 LTS and similar distributions (tested with GCC 11+)
+  - **macOS:** macOS 11+ with Homebrew (tested with Clang 14+)
+- **Compilers:**
+  - GCC 11+ with C++20 support
+  - Clang 14+ with C++20 support
+- **Build System:** Cross-platform Makefile with automatic OS detection
 
 ## Future Improvements
 

@@ -1,7 +1,7 @@
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/dynamic_message.h>
 #include <google/protobuf/message.h>
-#include <lua5.3/lua.hpp>
+#include <lua.hpp>
 
 #include <concepts>
 #include <memory>
