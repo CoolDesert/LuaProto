@@ -3,8 +3,10 @@
 #include <google/protobuf/message.h>
 #include <lua5.3/lua.hpp>
 
+#include <concepts>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <span>
 
@@ -18,6 +20,23 @@ using GPFieldDescriptor     = google::protobuf::FieldDescriptor;
 using GPReflection          = google::protobuf::Reflection;
 using GPEnumValueDescriptor = google::protobuf::EnumValueDescriptor;
 using GPDescriptor          = google::protobuf::Descriptor;
+
+// C++20 concepts for type safety
+template<typename T>
+concept ProtobufPointer = std::is_pointer_v<T> && 
+    (std::is_same_v<std::remove_const_t<std::remove_pointer_t<T>>, GPMessage> ||
+     std::is_same_v<std::remove_const_t<std::remove_pointer_t<T>>, GPReflection> ||
+     std::is_same_v<std::remove_const_t<std::remove_pointer_t<T>>, GPFieldDescriptor> ||
+     std::is_same_v<std::remove_const_t<std::remove_pointer_t<T>>, GPDescriptor> ||
+     std::is_same_v<std::remove_const_t<std::remove_pointer_t<T>>, GPDescriptorPool> ||
+     std::is_same_v<std::remove_const_t<std::remove_pointer_t<T>>, GPMessageFactory> ||
+     std::is_same_v<std::remove_const_t<std::remove_pointer_t<T>>, GPEnumValueDescriptor>);
+
+// Helper function using concepts for null-checking with branch prediction
+template<ProtobufPointer T>
+[[nodiscard]] constexpr bool is_valid(T ptr) noexcept {
+	return ptr != nullptr;
+}
 
 // Forward declarations
 static void _msg2table(lua_State *L, const GPMessage *pMsg) noexcept(false);
@@ -35,17 +54,17 @@ static void _setfield(lua_State *L, GPMessage *pMsg,
 	auto *pMFactory = static_cast<GPMessageFactory *>(
 	    lua_touserdata(L, lua_upvalueindex(2)));
 
-	if (pDPool == nullptr || pMFactory == nullptr) [[unlikely]]
+	if (!is_valid(pDPool) || !is_valid(pMFactory)) [[unlikely]]
 		return nullptr;
 
 	const auto *pDescriptor = pDPool->FindMessageTypeByName(name);
 
-	if (pDescriptor == nullptr) [[unlikely]]
+	if (!is_valid(pDescriptor)) [[unlikely]]
 		return nullptr;
 
 	const auto *pMessage = pMFactory->GetPrototype(pDescriptor);
 
-	if (pMessage == nullptr) [[unlikely]]
+	if (!is_valid(pMessage)) [[unlikely]]
 		return nullptr;
 
 	return pMessage->New();
@@ -177,11 +196,11 @@ static void _msg2kv(lua_State *L, const GPMessage *pMsg) noexcept(false) {
 	std::vector<const GPFieldDescriptor *> fields;
 
 	const auto *pReflection = pMsg->GetReflection();
-	if (pReflection == nullptr) [[unlikely]]
+	if (!is_valid(pReflection)) [[unlikely]]
 		luaL_error(L, "GetReflection Failed!");
 
 	const auto *pDesc = pMsg->GetDescriptor();
-	if (pDesc == nullptr) [[unlikely]]
+	if (!is_valid(pDesc)) [[unlikely]]
 		luaL_error(L, "GetDescriptor Failed!");
 
 	pReflection->ListFields(*pMsg, &fields);
@@ -189,12 +208,12 @@ static void _msg2kv(lua_State *L, const GPMessage *pMsg) noexcept(false) {
 		luaL_error(L, "msg2kv size error!");
 
 	const auto *pField = pDesc->FindFieldByName("key");
-	if (pField == nullptr) [[unlikely]]
+	if (!is_valid(pField)) [[unlikely]]
 		luaL_error(L, "no key field!");
 	_pushfield(L, pMsg, pReflection, pField);
 
 	pField = pDesc->FindFieldByName("value");
-	if (pField == nullptr) [[unlikely]]
+	if (!is_valid(pField)) [[unlikely]]
 		luaL_error(L, "no value field!");
 	_pushfield(L, pMsg, pReflection, pField);
 }
@@ -236,7 +255,7 @@ static void _msg2table(lua_State *L, const GPMessage *pMsg) noexcept(false) {
 	std::vector<const GPFieldDescriptor *> fields;
 
 	const auto *pReflection = pMsg->GetReflection();
-	if (pReflection == nullptr) [[unlikely]]
+	if (!is_valid(pReflection)) [[unlikely]]
 		luaL_error(L, "GetReflection Failed!");
 
 	pReflection->ListFields(*pMsg, &fields);
@@ -406,19 +425,19 @@ static void _setarray(lua_State *L, GPMessage *pMsg,
 
 static void _kv2msg(lua_State *L, GPMessage *pMsg) noexcept(false) {
 	const auto *pReflection = pMsg->GetReflection();
-	if (pReflection == nullptr) [[unlikely]]
+	if (!is_valid(pReflection)) [[unlikely]]
 		luaL_error(L, "GetReflection Failed!");
 
 	const auto *pDesc = pMsg->GetDescriptor();
-	if (pDesc == nullptr) [[unlikely]]
+	if (!is_valid(pDesc)) [[unlikely]]
 		luaL_error(L, "GetDescriptor Failed!");
 
 	const auto *pKeyField = pDesc->FindFieldByName("key");
-	if (pKeyField == nullptr) [[unlikely]]
+	if (!is_valid(pKeyField)) [[unlikely]]
 		luaL_error(L, "no key field!");
 
 	const auto *pValueField = pDesc->FindFieldByName("value");
-	if (pValueField == nullptr) [[unlikely]]
+	if (!is_valid(pValueField)) [[unlikely]]
 		luaL_error(L, "no value field!");
 
 	lua_pushvalue(L, -2); // key, value, key
@@ -468,7 +487,7 @@ static void _table2msg(lua_State *L, GPMessage *pMsg) noexcept(false) {
 	const auto *pReflection = pMsg->GetReflection();
 	const auto *pDescriptor = pMsg->GetDescriptor();
 	
-	if (pReflection == nullptr || pDescriptor == nullptr) [[unlikely]]
+	if (!is_valid(pReflection) || !is_valid(pDescriptor)) [[unlikely]]
 		return;
 
 	if (!lua_istable(L, -1)) [[unlikely]]
@@ -478,7 +497,7 @@ static void _table2msg(lua_State *L, GPMessage *pMsg) noexcept(false) {
 	while (lua_next(L, -2) != 0) {
 		const char *key = luaL_checkstring(L, -2);
 		const auto *field = pDescriptor->FindFieldByName(key);
-		if (field == nullptr) [[unlikely]]
+		if (!is_valid(field)) [[unlikely]]
 			luaL_error(L, "invalid field %s!", key);
 		_setfield(L, pMsg, pReflection, field);
 		lua_pop(L, 1);
