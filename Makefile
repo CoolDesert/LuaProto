@@ -1,9 +1,9 @@
-BINDIR=/opt/homebrew/bin
-LIBDIR=/opt/homebrew/lib
-INCDIR=/opt/homebrew/include
-CC=clang++
-# NDEBUG is very important
-CFLAGS=-fPIC --shared -undefined dynamic_lookup -std=c++20 -DNDEBUG
+BINDIR?=/usr/bin
+LIBDIR?=/usr/lib/x86_64-linux-gnu
+INCDIR?=/usr/include
+CC=g++
+# Use C++20 standard with optimizations and NDEBUG
+CFLAGS=-fPIC --shared -std=c++20 -O2 -DNDEBUG -Wall -Wextra
 
 PROTO_SRCS=example.proto
 PROTO_CC=$(PROTO_SRCS:.proto=.pb.cc)
